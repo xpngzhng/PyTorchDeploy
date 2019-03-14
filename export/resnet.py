@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
@@ -445,6 +446,144 @@ def resnetc152(pretrained=False):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNetConvFeatures(Bottleneck, [3, 8, 36, 3])
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']), strict=False)
+    return model
+
+
+class ResNetSiamese(nn.Module):
+
+    def __init__(self, block, layers):
+        self.inplanes = 64
+        super(ResNetSiamese, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+                               bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.sigmoid = nn.Sigmoid()
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.linear = nn.Linear(512 * block.expansion, 1)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes * block.expansion,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x0, x1):
+        # x0 = x[0]
+        x0 = self.conv1(x0)
+        x0 = self.bn1(x0)
+        x0 = self.relu(x0)
+        x0 = self.maxpool(x0)
+
+        x0 = self.layer1(x0)
+        x0 = self.layer2(x0)
+        x0 = self.layer3(x0)
+        x0 = self.layer4(x0)
+
+        x0 = self.avgpool(x0)
+        x0 = x0.view(x0.size(0), -1)
+
+        # x1 = x[1]
+        x1 = self.conv1(x1)
+        x1 = self.bn1(x1)
+        x1 = self.relu(x1)
+        x1 = self.maxpool(x1)
+
+        x1 = self.layer1(x1)
+        x1 = self.layer2(x1)
+        x1 = self.layer3(x1)
+        x1 = self.layer4(x1)
+
+        x1 = self.avgpool(x1)
+        x1 = x1.view(x1.size(0), -1)
+
+        y = torch.abs(x1 - x0)
+        y = self.linear(y)
+
+        return y
+
+
+def resnets18(pretrained=False, **kwargs):
+    """Constructs a ResNet-18 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNetSiamese(BasicBlock, [2, 2, 2, 2], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet18']), strict=False)
+    return model
+
+
+def resnets34(pretrained=False, **kwargs):
+    """Constructs a ResNet-34 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNetSiamese(BasicBlock, [3, 4, 6, 3], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet34']), strict=False)
+    return model
+
+
+def resnets50(pretrained=False, **kwargs):
+    """Constructs a ResNet-50 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNetSiamese(Bottleneck, [3, 4, 6, 3], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']), strict=False)
+    return model
+
+
+def resnets101(pretrained=False, **kwargs):
+    """Constructs a ResNet-101 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNetSiamese(Bottleneck, [3, 4, 23, 3], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']), strict=False)
+    return model
+
+
+def resnets152(pretrained=False, **kwargs):
+    """Constructs a ResNet-152 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNetSiamese(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet152']), strict=False)
     return model
