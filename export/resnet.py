@@ -495,7 +495,6 @@ class ResNetSiamese(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x0, x1):
-        # x0 = x[0]
         x0 = self.conv1(x0)
         x0 = self.bn1(x0)
         x0 = self.relu(x0)
@@ -509,7 +508,6 @@ class ResNetSiamese(nn.Module):
         x0 = self.avgpool(x0)
         x0 = x0.view(x0.size(0), -1)
 
-        # x1 = x[1]
         x1 = self.conv1(x1)
         x1 = self.bn1(x1)
         x1 = self.relu(x1)
